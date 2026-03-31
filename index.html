@@ -236,6 +236,11 @@
       cursor: pointer; transition: all .2s;
     }
     .copy-btn:hover { background: #2d4060; color: #e2e8f0; }
+    .dl-legend { display: flex; align-items: center; margin: 6px 0 10px; flex-wrap: wrap; gap: 4px; }
+    .dl-legend-item { font-size: 10px; color: #8899aa; }
+    .btn-badge { display: inline-block; width: 7px; height: 7px; border-radius: 50%; vertical-align: middle; margin-left: 5px; }
+    .btn-badge-live { background: #4caf7d; }
+    .btn-badge-snap { background: #8899aa; }
 
     pre#curlOut {
       background: #0f1923; border: 1px solid #243044; border-radius: 7px;
@@ -264,6 +269,7 @@
       <h1><span class="tag">PSD2</span><span class="tag">Berlin Group v1.3</span>AIS Consent Flow</h1>
       <p>Visualize the TPP &rarr; ASPSP signed consent creation — generates a ready-to-run curl command</p>
     </div>
+    <a href="Troubleshooting.html" style="margin-left:auto;padding:6px 14px;background:#1a2535;border:1px solid #2d4060;border-radius:7px;color:#4d9ef7;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;align-self:center;" onmouseover="this.style.background='#243044'" onmouseout="this.style.background='#1a2535'">Troubleshooting</a>
   </div>
 
   <div class="layout">
@@ -300,6 +306,7 @@
               <label class="file-label">Load file
                 <input type="file" accept=".pem,.crt,.cer,.txt" onchange="loadPemFile('cert', this)">
               </label>
+              <button class="gen-btn" id="certDlBtn" onclick="downloadCert()" disabled>Download</button>
             </div>
             <textarea class="pem-textarea" id="cert-text" rows="3"
               placeholder="Paste -----BEGIN CERTIFICATE----- ..."
@@ -311,12 +318,12 @@
 
           <div class="field">
             <label>Endpoint</label>
-            <input type="text" id="cfg-endpoint" value="https://apisandbox.openbankproject.com//berlin-group/v1.3/consents">
+            <input type="text" id="cfg-endpoint" value="https://apisandbox.openbankproject.com/berlin-group/v1.3/consents">
           </div>
 
           <div class="field">
-            <label>Key ID</label>
-            <input type="text" id="cfg-keyid" value="SN=1082, CA=CN=MAIB Prisacaru Sergiu (Test), O=MAIB">
+            <label>Key ID <span style="font-weight:400;color:#4d6080">(auto-filled from certificate)</span></label>
+            <input type="text" id="cfg-keyid" placeholder="Load a certificate to auto-fill">
           </div>
 
           <!-- PSU -->
@@ -328,11 +335,11 @@
           </div>
           <div class="field">
             <label>Device Name</label>
-            <input type="text" id="cfg-device-name" value="Kalina-PC">
+            <input type="text" id="cfg-device-name" value="User-Device">
           </div>
           <div class="field">
             <label>IP Address</label>
-            <input type="text" id="cfg-ip" value="192.168.1.42">
+            <input type="text" id="cfg-ip" value="10.0.0.1">
           </div>
           <div class="field">
             <label>TPP Redirect URI</label>
@@ -380,8 +387,8 @@
             <div class="arrow-ln"></div>
           </div>
           <div class="arch-box">
-            <div class="bt">OBP Sandbox</div>
-            <div class="bs">ASPSP (Bank)</div>
+            <div class="bt">ASPSP</div>
+            <div class="bs">Bank / API Server</div>
           </div>
           <div class="arch-arrow">
             <div class="arrow-lbl">consentId + SCA link</div>
@@ -474,7 +481,16 @@
         <div class="curl-wrap" id="curlWrap">
           <div class="curl-title">
             <span>Generated curl Command</span>
-            <button class="copy-btn" onclick="copyCurl()">Copy</button>
+            <button class="copy-btn" onclick="copyCurl()" title="Copy the curl command to clipboard">Copy</button>
+            <button class="copy-btn" onclick="downloadCurl()" style="margin-left:6px" title="Pre-signed snapshot — valid for ~5 min (server clock skew window)">Download curl <span class="btn-badge btn-badge-snap"></span></button>
+            <button class="copy-btn" id="dlBundleBtn" onclick="downloadBundle()" style="margin-left:6px" title="Re-signs at runtime using openssl — always valid. Includes private_key.pem, certificate.pem and a self-contained bash script.">Download Bundle <span class="btn-badge btn-badge-live"></span></button>
+            <button class="copy-btn" id="dlCsBtn" onclick="downloadCSharp()" style="margin-left:6px" title="Re-signs at runtime using .NET crypto — always valid. Self-contained C# console app.">Download C# <span class="btn-badge btn-badge-live"></span></button>
+            <button class="copy-btn" id="dlPostmanBtn" onclick="downloadPostman()" style="margin-left:6px" title="Pre-signed snapshot — valid for ~5 min (server clock skew window). Import into Postman and send immediately.">Download Postman <span class="btn-badge btn-badge-snap"></span></button>
+            <button class="copy-btn" id="dlHttpBtn" onclick="downloadHttp()" style="margin-left:6px" title="Pre-signed snapshot — valid for ~5 min (server clock skew window). Open in VS Code REST Client or IntelliJ HTTP Client.">Download .http <span class="btn-badge btn-badge-snap"></span></button>
+          </div>
+          <div class="dl-legend">
+            <span class="dl-legend-item"><span class="btn-badge btn-badge-live" style="display:inline-block;margin-right:5px;margin-left:0"></span>re-signs — Bundle, C# compute a fresh signature every run, always valid</span>
+            <span class="dl-legend-item" style="margin-left:14px"><span class="btn-badge btn-badge-snap" style="display:inline-block;margin-right:5px;margin-left:0"></span>snapshot — curl, Postman, .http are pre-signed, valid ~5 min</span>
           </div>
           <pre id="curlOut"></pre>
         </div>
@@ -488,6 +504,9 @@
 <script>
   // ── PEM state ──
   const pem = { pk: null, cert: null };
+
+  // ── Last run config (populated when curl is shown) ──
+  const lastRun = {};
 
   function loadPemFile(type, input) {
     const file = input.files[0];
@@ -504,6 +523,81 @@
     setPem(type, document.getElementById(type + '-text').value);
   }
 
+  // ── Certificate DER parser ──
+  // Extracts serial number (decimal) and issuer attributes from any PEM certificate.
+  function parseCertInfo(pemStr) {
+    const m = pemStr.match(/-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/);
+    if (!m) return null;
+    const der = Uint8Array.from(atob(m[1].replace(/\s+/g, '')), c => c.charCodeAt(0));
+
+    // Skip tag byte, read DER length, return the VALUE slice, advance pos[0] past whole TLV.
+    function tlv(buf, pos) {
+      pos[0]++;                                   // skip tag
+      let len = buf[pos[0]++];
+      if (len & 0x80) {
+        const n = len & 0x7f; len = 0;
+        for (let i = 0; i < n; i++) len = (len << 8) | buf[pos[0]++];
+      }
+      const val = buf.slice(pos[0], pos[0] + len);
+      pos[0] += len;
+      return val;
+    }
+
+    // Advance pos[0] past tag + length bytes only (enter the container).
+    function enter(buf, pos) {
+      pos[0]++;                                   // skip tag
+      let len = buf[pos[0]++];
+      if (len & 0x80) { const n = len & 0x7f; for (let i = 0; i < n; i++) buf[pos[0]++]; }
+    }
+
+    try {
+      const pos = [0];
+      enter(der, pos);                            // enter Certificate SEQUENCE
+      enter(der, pos);                            // enter TBSCertificate SEQUENCE
+
+      if (der[pos[0]] === 0xa0) tlv(der, pos);   // skip optional version [0]
+
+      // Serial number INTEGER → convert bytes to decimal string
+      const snBytes = tlv(der, pos);
+      let sn = 0n;
+      for (const b of snBytes) sn = (sn << 8n) | BigInt(b);
+      const serialNumber = sn.toString(10);
+
+      tlv(der, pos);                              // skip signature algorithm
+
+      // Issuer Name: read full value, then parse on a fresh index (no shared state)
+      const issuerBytes = tlv(der, pos);
+      const oidMap = { '550403': 'CN', '55040a': 'O', '55040b': 'OU', '550406': 'C' };
+      const issuer = {};
+      const ip = [0];
+      while (ip[0] < issuerBytes.length) {
+        const setVal = tlv(issuerBytes, ip);      // one RDN SET
+        const sp = [0];
+        while (sp[0] < setVal.length) {
+          const seqVal  = tlv(setVal, sp);        // AttributeTypeAndValue SEQUENCE
+          const kp      = [0];
+          const oidBytes = tlv(seqVal, kp);
+          const strBytes = tlv(seqVal, kp);
+          const oidHex   = Array.from(oidBytes).map(b => b.toString(16).padStart(2,'0')).join('');
+          if (oidMap[oidHex]) issuer[oidMap[oidHex]] = new TextDecoder().decode(strBytes);
+        }
+      }
+
+      return { serialNumber, issuer };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function certInfoToKeyId(info) {
+    if (!info) return '';
+    let s = `SN=${info.serialNumber}`;
+    if (info.issuer.CN) s += `, CA=CN=${info.issuer.CN}`;
+    // O is mandatory in the server's keyId parser; fall back to CN if absent
+    s += `, O=${info.issuer.O || info.issuer.CN || 'Unknown'}`;
+    return s;
+  }
+
   function setPem(type, content) {
     const keyword = type === 'pk' ? 'PRIVATE KEY' : 'CERTIFICATE';
     const ok = content.includes('BEGIN ' + keyword);
@@ -513,6 +607,27 @@
     statusEl.className   = 'pem-status' + (ok ? ' ok' : '');
     const ta = document.getElementById(type + '-text');
     ta.className = 'pem-textarea' + (ok ? ' loaded' : '');
+    // Auto-populate Key ID from certificate serial + issuer
+    if (type === 'cert' && ok) {
+      const info = parseCertInfo(content);
+      const kid  = certInfoToKeyId(info);
+      if (kid) document.getElementById('cfg-keyid').value = kid;
+    }
+    // Enable/disable download button for cert
+    if (type === 'cert') {
+      const dlBtn = document.getElementById('certDlBtn');
+      if (dlBtn) dlBtn.disabled = !ok;
+    }
+  }
+
+  function downloadCert() {
+    if (!pem.cert) return;
+    const blob = new Blob([pem.cert], { type: 'application/x-pem-file' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'certificate.pem';
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
 
   // ── PEM helpers ──
@@ -784,6 +899,14 @@
     document.getElementById('curlOut').innerHTML = lines.join('\n');
     document.getElementById('curlWrap').classList.add('show');
 
+    // Persist config for bundle download
+    Object.assign(lastRun, {
+      endpoint, keyId, body,
+      deviceId, deviceName, psuIp, redirectUri, nokUri,
+      dateHeader, requestId, digestHeader,
+      realSignature, certB64,
+    });
+
     autoBtn.disabled = false; stepBtn.disabled = false;
     stepBtn.classList.remove('active-mode');
   }
@@ -822,13 +945,17 @@
   const OID_SHA256RSA = '2a864886f70d01010b';
   const OID_RSA       = '2a864886f70d010101';
   const OID_CN        = '550403';
+  const OID_O         = '55040a';
 
-  async function buildSelfSignedCert(privateKey, spkiDer, cn) {
+  async function buildSelfSignedCert(privateKey, spkiDer, cn, org) {
     const sigAlg  = derSeq(cat(derOid(OID_SHA256RSA), derNull()));
-    const name    = derSeq(derSet(derSeq(cat(derOid(OID_CN), derPrint(cn)))));
+    const rdnO    = derSet(derSeq(cat(derOid(OID_O),  derPrint(org))));
+    const rdnCN   = derSet(derSeq(cat(derOid(OID_CN), derPrint(cn))));
+    const name    = derSeq(cat(rdnO, rdnCN));
     const now     = new Date();
+    const notBefore = new Date(now.getTime() - 5 * 60 * 1000); // 5-min backdate for clock skew
     const expiry  = new Date(now.getTime() + 3 * 365 * 24 * 60 * 60 * 1000);
-    const validity= derSeq(cat(derUTC(now), derUTC(expiry)));
+    const validity= derSeq(cat(derUTC(notBefore), derUTC(expiry)));
     const version = derCtx(0, new Uint8Array([0x02, 0x01, 0x02])); // v3
     const serial  = derInt(new Uint8Array([0x01]));
     const spki    = new Uint8Array(spkiDer);
@@ -863,7 +990,7 @@
         crypto.subtle.exportKey('spki',  kp.publicKey),
       ]);
 
-      const certDer = await buildSelfSignedCert(kp.privateKey, spki, 'Demo TPP (Berlin Group)');
+      const certDer = await buildSelfSignedCert(kp.privateKey, spki, 'Demo TPP (Berlin Group)', 'Demo TPP');
 
       const pkPem   = ab2pem('PRIVATE KEY', pkcs8);
       const certPem = ab2pem('CERTIFICATE', certDer);
@@ -887,6 +1014,330 @@
       btn.textContent = 'Copied!';
       setTimeout(() => btn.textContent = 'Copy', 1500);
     });
+  }
+
+  function downloadCurl() {
+    const raw = document.getElementById('curlOut').textContent;
+    dlFile('consent-request.curl', raw, 'text/plain');
+  }
+
+  function downloadPostman() {
+    if (!lastRun.endpoint) {
+      alert('Run the flow first to generate the Postman collection.');
+      return;
+    }
+
+    const { endpoint, keyId, body, dateHeader, requestId, digestHeader,
+            realSignature, certB64, deviceId, deviceName, psuIp, redirectUri, nokUri } = lastRun;
+
+    const sigDisplay  = realSignature || '<RSA-SHA256-SIGNATURE>';
+    const certDisplay = certB64 || '<BASE64-CERTIFICATE>';
+
+    const collection = {
+      info: {
+        name: 'Berlin Group AIS v1.3 — Create Consent',
+        schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
+      },
+      item: [
+        {
+          name: 'POST Create Consent',
+          request: {
+            method: 'POST',
+            header: [
+              { key: 'Content-Type',             value: 'application/json' },
+              { key: 'Date',                      value: dateHeader },
+              { key: 'X-Request-ID',              value: requestId },
+              { key: 'Digest',                    value: digestHeader },
+              { key: 'Signature',                 value: `keyId="${keyId}", algorithm="rsa-sha256", headers="digest date x-request-id", signature="${sigDisplay}"` },
+              { key: 'TPP-Signature-Certificate', value: certDisplay },
+              { key: 'PSU-Device-ID',             value: deviceId },
+              { key: 'PSU-Device-Name',           value: deviceName },
+              { key: 'PSU-IP-Address',            value: psuIp },
+              { key: 'TPP-Redirect-URI',          value: redirectUri },
+              { key: 'TPP-Nok-Redirect-URI',      value: nokUri },
+            ],
+            body: {
+              mode: 'raw',
+              raw: body,
+              options: { raw: { language: 'json' } },
+            },
+            url: { raw: endpoint },
+          },
+        },
+      ],
+    };
+
+    dlFile('berlin-group-consent.postman_collection.json',
+           JSON.stringify(collection, null, 2),
+           'application/json');
+
+    const btn = document.getElementById('dlPostmanBtn');
+    btn.textContent = 'Downloading…';
+    setTimeout(() => btn.textContent = 'Download Postman', 1000);
+  }
+
+  function downloadHttp() {
+    if (!lastRun.endpoint) {
+      alert('Run the flow first to generate the .http file.');
+      return;
+    }
+
+    const { endpoint, keyId, body, dateHeader, requestId, digestHeader,
+            realSignature, certB64, deviceId, deviceName, psuIp, redirectUri, nokUri } = lastRun;
+
+    const sigDisplay  = realSignature || '<RSA-SHA256-SIGNATURE>';
+    const certDisplay = certB64 || '<BASE64-CERTIFICATE>';
+
+    const http = `### Berlin Group AIS v1.3 — Create Consent
+### Generated by: Berlin Group AIS Visualizer
+### Works in: VS Code REST Client, IntelliJ HTTP Client
+
+POST ${endpoint}
+Content-Type: application/json
+Date: ${dateHeader}
+X-Request-ID: ${requestId}
+Digest: ${digestHeader}
+Signature: keyId="${keyId}", algorithm="rsa-sha256", headers="digest date x-request-id", signature="${sigDisplay}"
+TPP-Signature-Certificate: ${certDisplay}
+PSU-Device-ID: ${deviceId}
+PSU-Device-Name: ${deviceName}
+PSU-IP-Address: ${psuIp}
+TPP-Redirect-URI: ${redirectUri}
+TPP-Nok-Redirect-URI: ${nokUri}
+
+${body}
+`;
+
+    dlFile('consent-request.http', http, 'text/plain');
+
+    const btn = document.getElementById('dlHttpBtn');
+    btn.textContent = 'Downloading…';
+    setTimeout(() => btn.textContent = 'Download .http', 1000);
+  }
+
+
+  function dlFile(filename, content, mime) {
+    const blob = new Blob([content], { type: mime });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function downloadBundle() {
+    if (!pem.pk || !pem.cert || !lastRun.endpoint) {
+      alert('Run the flow first to generate the bundle.');
+      return;
+    }
+
+    const {
+      endpoint, keyId, body,
+      deviceId, deviceName, psuIp, redirectUri, nokUri,
+    } = lastRun;
+
+    // 1. private_key.pem
+    dlFile('private_key.pem', pem.pk, 'application/x-pem-file');
+
+    // 2. certificate.pem
+    setTimeout(() => dlFile('certificate.pem', pem.cert, 'application/x-pem-file'), 300);
+
+    // 3. consent-request.sh — self-contained bash script with openssl signing
+    const bodyEscaped = body.replace(/'/g, "'\\''");
+    const script = `#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# Berlin Group AIS v1.3 — Create Consent
+# Generated by: Berlin Group AIS Visualizer
+# Requires: openssl, curl
+# Usage: chmod +x consent-request.sh && ./consent-request.sh
+# ─────────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+
+ENDPOINT='${endpoint}'
+KEY_ID='${keyId}'
+DEVICE_ID='${deviceId}'
+DEVICE_NAME='${deviceName}'
+PSU_IP='${psuIp}'
+REDIRECT_URI='${redirectUri}'
+NOK_URI='${nokUri}'
+
+BODY='${bodyEscaped}'
+
+PRIVATE_KEY="${pem.pk.trimEnd()}"
+
+CERTIFICATE="${pem.cert.trimEnd()}"
+
+# ── Request identity ──────────────────────────────────────────────────────────
+DATE=$(date -u "+%a, %d %b %Y %H:%M:%S GMT")
+XRID=$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())")
+
+# ── Digest (SHA-256 of body) ──────────────────────────────────────────────────
+BODY_DIGEST=$(printf '%s' "$BODY" | openssl dgst -sha256 -binary | openssl base64 -A)
+
+# ── Signing string ────────────────────────────────────────────────────────────
+SIGNING_STRING="digest: SHA-256=\${BODY_DIGEST}
+date: \${DATE}
+x-request-id: \${XRID}"
+
+# ── RSA-SHA256 signature ──────────────────────────────────────────────────────
+SIGNATURE=$(printf '%s' "$SIGNING_STRING" \\
+  | openssl dgst -sha256 -sign <(printf '%s' "$PRIVATE_KEY") -binary \\
+  | openssl base64 -A)
+
+# ── TPP-Signature-Certificate (base64 of the full PEM text) ──────────────────
+CERT_B64=$(printf '%s' "$CERTIFICATE" | openssl base64 -A)
+
+# ── Send ──────────────────────────────────────────────────────────────────────
+curl -i -X POST "$ENDPOINT" \\
+  -H "Content-Type: application/json" \\
+  -H "Date: \${DATE}" \\
+  -H "X-Request-ID: \${XRID}" \\
+  -H "Digest: SHA-256=\${BODY_DIGEST}" \\
+  -H "Signature: keyId=\\"\${KEY_ID}\\", algorithm=\\"rsa-sha256\\", headers=\\"digest date x-request-id\\", signature=\\"\${SIGNATURE}\\"" \\
+  -H "TPP-Signature-Certificate: \${CERT_B64}" \\
+  -H "PSU-Device-ID: \${DEVICE_ID}" \\
+  -H "PSU-Device-Name: \${DEVICE_NAME}" \\
+  -H "PSU-IP-Address: \${PSU_IP}" \\
+  -H "TPP-Redirect-URI: \${REDIRECT_URI}" \\
+  -H "TPP-Nok-Redirect-URI: \${NOK_URI}" \\
+  -d "$BODY"
+`;
+
+    setTimeout(() => dlFile('consent-request.sh', script, 'text/x-shellscript'), 600);
+
+    const btn = document.getElementById('dlBundleBtn');
+    btn.textContent = 'Downloading…';
+    setTimeout(() => btn.textContent = 'Download Bundle', 1200);
+  }
+
+  function downloadCSharp() {
+    if (!pem.pk || !pem.cert || !lastRun.endpoint) {
+      alert('Run the flow first to generate the C# example.');
+      return;
+    }
+
+    const {
+      endpoint, keyId, body,
+      deviceId, deviceName, psuIp, redirectUri, nokUri,
+    } = lastRun;
+
+    const bodyLiteral = body.replace(/\\/g, '\\\\').replace(/"""/g, '\\"""');
+
+    const cs = `// ─────────────────────────────────────────────────────────────────────────────
+// Berlin Group AIS v1.3 — Create Consent
+// Translated from consent-request.sh by Berlin Group AIS Visualizer
+// Requires: .NET 6+
+// Usage: dotnet run  (or compile and run ConsentRequest.cs)
+// ─────────────────────────────────────────────────────────────────────────────
+
+using System;
+using System.Net.Http;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading.Tasks;
+
+// ── Configuration ─────────────────────────────────────────────────────────────
+
+const string Endpoint   = "${endpoint}";
+const string KeyId      = "${keyId}";
+const string DeviceId   = "${deviceId}";
+const string DeviceName = "${deviceName}";
+const string PsuIp      = "${psuIp}";
+const string RedirectUri = "${redirectUri}";
+const string NokUri     = "${nokUri}";
+
+const string Body = """
+${bodyLiteral}
+""";
+
+const string PrivateKeyPem = """
+${pem.pk.trimEnd()}
+""";
+
+const string CertificatePem = """
+${pem.cert.trimEnd()}
+""";
+
+await SendConsentRequest();
+
+// ── Implementation ────────────────────────────────────────────────────────────
+
+static async Task SendConsentRequest()
+{
+    // ── Request identity ──────────────────────────────────────────────────────
+    var date      = DateTime.UtcNow.ToString("ddd, dd MMM yyyy HH:mm:ss") + " GMT";
+    var requestId = Guid.NewGuid().ToString();
+
+    // ── Digest: SHA-256 of body, base64-encoded ───────────────────────────────
+    var bodyBytes   = Encoding.UTF8.GetBytes(Body);
+    var hashBytes   = SHA256.HashData(bodyBytes);
+    var bodyDigest  = Convert.ToBase64String(hashBytes);
+    var digestHeader = $"SHA-256={bodyDigest}";
+
+    // ── Signing string (same field order as the Signature header 'headers' param)
+    var signingString = $"digest: {digestHeader}\\ndate: {date}\\nx-request-id: {requestId}";
+
+    // ── RSA-SHA256 signature ──────────────────────────────────────────────────
+    using var rsa = RSA.Create();
+    rsa.ImportFromPem(PrivateKeyPem);
+    var signingBytes = Encoding.UTF8.GetBytes(signingString);
+    var signatureBytes = rsa.SignData(signingBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+    var signature = Convert.ToBase64String(signatureBytes);
+
+    // ── TPP-Signature-Certificate: base64 of the full PEM text ───────────────
+    var certB64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(CertificatePem));
+
+    // ── Assemble Signature header ─────────────────────────────────────────────
+    var signatureHeader =
+        $"keyId=\\"{KeyId}\\", algorithm=\\"rsa-sha256\\", " +
+        $"headers=\\"digest date x-request-id\\", signature=\\"{signature}\\"";
+
+    // ── Send ──────────────────────────────────────────────────────────────────
+    using var client = new HttpClient();
+
+    var request = new HttpRequestMessage(HttpMethod.Post, Endpoint)
+    {
+        Content = new StringContent(Body, Encoding.UTF8, "application/json")
+    };
+
+    request.Headers.TryAddWithoutValidation("Date",                     date);
+    request.Headers.TryAddWithoutValidation("X-Request-ID",             requestId);
+    request.Headers.TryAddWithoutValidation("Digest",                   digestHeader);
+    request.Headers.TryAddWithoutValidation("Signature",                signatureHeader);
+    request.Headers.TryAddWithoutValidation("TPP-Signature-Certificate", certB64);
+    request.Headers.TryAddWithoutValidation("PSU-Device-ID",            DeviceId);
+    request.Headers.TryAddWithoutValidation("PSU-Device-Name",          DeviceName);
+    request.Headers.TryAddWithoutValidation("PSU-IP-Address",           PsuIp);
+    request.Headers.TryAddWithoutValidation("TPP-Redirect-URI",         RedirectUri);
+    request.Headers.TryAddWithoutValidation("TPP-Nok-Redirect-URI",     NokUri);
+
+    Console.WriteLine("── Request ──────────────────────────────────────────────");
+    Console.WriteLine($"POST {Endpoint}");
+    Console.WriteLine($"Date:                      {date}");
+    Console.WriteLine($"X-Request-ID:              {requestId}");
+    Console.WriteLine($"Digest:                    {digestHeader}");
+    Console.WriteLine($"Signature:                 {signatureHeader[..Math.Min(80, signatureHeader.Length)]}…");
+    Console.WriteLine($"TPP-Signature-Certificate: {certB64[..Math.Min(40, certB64.Length)]}…");
+    Console.WriteLine();
+
+    var response = await client.SendAsync(request);
+    var body     = await response.Content.ReadAsStringAsync();
+
+    Console.WriteLine("── Response ─────────────────────────────────────────────");
+    Console.WriteLine($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+    foreach (var h in response.Headers)
+        Console.WriteLine($"{h.Key}: {string.Join(", ", h.Value)}");
+    Console.WriteLine();
+    Console.WriteLine(body);
+}
+`;
+
+    dlFile('ConsentRequest.cs', cs, 'text/plain');
+
+    const btn = document.getElementById('dlCsBtn');
+    btn.textContent = 'Downloading…';
+    setTimeout(() => btn.textContent = 'Download C#', 1000);
   }
 </script>
 </body>

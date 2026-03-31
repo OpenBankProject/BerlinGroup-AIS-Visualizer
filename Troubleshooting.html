@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Troubleshooting — Berlin Group AIS v1.3</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f1923;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 28px 20px;
+      line-height: 1.65;
+    }
+
+    .container { max-width: 860px; margin: 0 auto; }
+
+    /* ── Header ── */
+    .page-header {
+      padding-bottom: 20px;
+      border-bottom: 1px solid #2d4060;
+      margin-bottom: 36px;
+    }
+    .page-header h1 { font-size: 22px; font-weight: 700; }
+    .page-header p  { font-size: 13px; color: #6b829e; margin-top: 5px; }
+    .tag {
+      display: inline-block;
+      background: #1e3a5f; color: #4d9ef7;
+      font-size: 10px; font-weight: 700; letter-spacing: .5px;
+      padding: 2px 7px; border-radius: 4px; margin-right: 6px;
+    }
+
+    /* ── Sections ── */
+    section {
+      background: #1a2535;
+      border: 1px solid #2d4060;
+      border-radius: 10px;
+      padding: 24px 28px;
+      margin-bottom: 24px;
+    }
+
+    h2 {
+      font-size: 15px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .8px;
+      color: #6b829e;
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #2d4060;
+    }
+
+    p { font-size: 14px; margin-bottom: 12px; color: #c8d8e8; }
+    p:last-child { margin-bottom: 0; }
+
+    /* ── Tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 14px 0;
+    }
+    th {
+      background: #0f1923;
+      color: #6b829e;
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .5px;
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid #2d4060;
+    }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #1e2e42;
+      color: #c8d8e8;
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1e2e42; }
+
+    p code, li code, td code {
+      background: #1e3a5f;
+      color: #4d9ef7;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #1a2535; }
+    ::-webkit-scrollbar-thumb { background: #2d4060; border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="page-header">
+    <h1>Troubleshooting</h1>
+    <p><span class="tag">Berlin Group</span><span class="tag">AIS v1.3</span>
+    Common errors, their causes, and fixes</p>
+  </div>
+
+  <section id="errors">
+    <h2>Error Reference</h2>
+    <table>
+      <tr><th>Error</th><th>Cause</th><th>Fix</th></tr>
+      <tr><td><code>OBP-20310</code> — public key cannot verify</td><td>RSA signature check failed</td><td>Key pair mismatch; regenerate or reload matching key + cert</td></tr>
+      <tr><td><code>OBP-20312</code> — public key cannot be validated</td><td>PKIX chain validation failed</td><td>Use SANDBOX bypass or configure truststore (PRODUCTION)</td></tr>
+      <tr><td><code>OBP-20254</code> — invalid Signature header</td><td>Missing <code>SN</code>, <code>CA</code>, or <code>O</code> in keyId</td><td>Cert must have O= and CN= in issuer; reload cert to re-trigger auto-fill</td></tr>
+      <tr><td><code>OBP-34102</code> — regulated entity not found</td><td>No entity with matching serial + CA name</td><td>Check SN is decimal and CA name matches issuer CN</td></tr>
+      <tr><td><code>OBP-34103</code> — more than one regulated entity</td><td>Two entities share the same serial + CA</td><td>Serial + CA pair must be unique; delete the duplicate</td></tr>
+      <tr><td><code>FORMAT_ERROR</code> — missing mandatory CN field</td><td>keyId has no O= component</td><td>Regenerate keys (cert now includes O RDN)</td></tr>
+      <tr><td><code>OBP-35015</code> — consent does not match consumer</td><td><code>TPP-Signature-Certificate</code> differs from stored cert</td><td>Cert was renewed; update Consumer's <code>clientCertificate</code> or re-create consent</td></tr>
+      <tr><td><code>OBP-35016</code> — Consumer-Key header missing</td><td><code>consumer_validation_method_for_consent=CONSUMER_KEY_VALUE</code></td><td>Switch to <code>TPP_SIGNATURE_CERTIFICATE</code></td></tr>
+    </table>
+  </section>
+
+</div>
+</body>
+</html>
