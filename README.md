@@ -25,13 +25,12 @@ open index.html
 xdg-open index.html
 ```
 
-### Loading your keys
+### Keys & Certificate
 
-In the **Keys & Certificate** section:
-- Click **Load file** to pick your `private_key.pem` / `certificate.pem` from disk
-- Or paste the PEM content directly into the text area
+- Click **Generate demo keys** to create an RSA-2048 key pair and self-signed certificate in the browser — no tools required
+- Or click **Load file** to pick your own `private_key.pem` / `certificate.pem` from disk, or paste the PEM content directly
 
-When both are loaded the tool computes a real signature and fills the `TPP-Signature-Certificate` header — the generated curl command will be ready to run without any manual substitution.
+When both are loaded the tool computes a real signature and fills the `TPP-Signature-Certificate` header — the generated output will be ready to run without any manual substitution.
 
 > **Note:** Keys are never sent anywhere. All cryptographic operations run locally in the browser via the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API).
 
@@ -41,6 +40,19 @@ When both are loaded the tool computes a real signature and fills the `TPP-Signa
 |---|---|
 | **Auto Run** | Steps play through with animated delays |
 | **Step by Step** | Pauses after each step — click **Run Step →** to advance |
+
+### Download formats
+
+After the flow completes, the request can be exported in several formats:
+
+| Format | Description |
+|---|---|
+| **Copy** | Copies the curl command to clipboard |
+| **Download curl** | Pre-signed snapshot — valid for ~5 min |
+| **Download Bundle** | Bash script + key files — re-signs at runtime, always valid |
+| **Download C#** | Self-contained .NET 6+ console app — re-signs at runtime |
+| **Download Postman** | Postman collection — pre-signed snapshot |
+| **Download .http** | VS Code REST Client / IntelliJ HTTP Client — pre-signed snapshot |
 
 ## Compatibility
 
@@ -62,6 +74,10 @@ Change the **Endpoint** and **Key ID** fields in the UI to target a different AS
 
 - `private_key.pem` and `certificate.pem` are listed in `.gitignore` — do not commit them.
 - The tool runs entirely client-side; no data leaves your machine.
+
+## Troubleshooting
+
+See [Troubleshooting.html](Troubleshooting.html) for a reference of common errors, their causes, and fixes.
 
 ## License
 
